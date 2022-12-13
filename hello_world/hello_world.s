@@ -4,7 +4,7 @@
 
 ; Structure
 ;	Constants
-;	XXX JMP MAIN
+;	JMP MAIN
 ;	DATA
 ;	MAIN
 
@@ -15,9 +15,9 @@ SCREEN_RAM = $1E00
 	* = $1001
 
 ; SYS 4111 - this byte sequence should launch prg (taken directly from
-;            the disassembled and WORKING metagalactic llamas code
-        ;.BYTE $00,$A0,$9E,$28,$34,$31,$31,$31,$29,$00
-        .BYTE $0D,$10,$0A,$00,$9E,$28,$34,$31,$31,$31,$29,$00
+;            the disassembled and WORKING metagalactic llamas code)
+	;.BYTE $00,$A0,$9E,$28,$34,$31,$31,$31,$29,$00
+	.BYTE $0D,$10,$0A,$00,$9E,$28,$34,$31,$31,$31,$29,$00
 	BRK #$00
 	JMP MAIN
 
