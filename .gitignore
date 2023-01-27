@@ -1,0 +1,8 @@
+# gitignore file for VIC-20 repository
+# The folling should be ignored:
+#	- Resources folder
+#	- all .prg files
+
+resources/
+*.prg
+*.bin
