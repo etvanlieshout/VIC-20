@@ -3,7 +3,7 @@
 ;-------------------------------------------------------------------------------
 
 ; Structure
-;	Constants
+;	CONSTANTS
 ;	JMP MAIN
 ;	DATA
 ;	MAIN
@@ -40,8 +40,6 @@ LOOP
 	INX		; increment X (offset into char data)
 	JMP LOOP
 DONE
-	;JMP MAIN
-	;BRK
 	JMP DONE	; infinite loop to keep the message on the screen
 
 CLR_SCREEN
