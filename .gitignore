@@ -6,3 +6,4 @@
 resources/
 *.prg
 *.bin
+*.s.swp
