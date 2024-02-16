@@ -7,6 +7,7 @@
 ;  3rd letter: horizontal hemisphere:    Left, Right
 
 .BYTE $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF	; Block
+.BYTE $00,$00,$00,$00,$00,$00,$00,$00	; Block
 
 ; ~~~~ FRAME 2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .BYTE $00,$00,$00,$00,$00,$00,$00,$3E	; TUR 2
