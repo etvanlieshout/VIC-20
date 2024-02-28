@@ -16,7 +16,7 @@
 
 ; Addresses
 SCR1_RAM = $1E00
-SCR2_RAM = $1C00
+SCR0_RAM = $1C00
 CHAR_MEM = $1800
 SCRN_SEL = $9002
 
@@ -56,113 +56,86 @@ IRQINIT
 	RTS
 
 ; Interrupt handler: calls interrupts as subroutines
-; Interrupt handler begins @ addr $102B
-IRQS
-	INC CNTR
-	LDA CNTR
-	CMP #$3C ; == 60 ticks = 1 sec
-	BNE IRQEND
+; Interrupt handler begins @ addr $XXXX
+;IRQS
+;	INC CNTR
+;	LDA CNTR
+;	CMP #$06 ; == 60 ticks = 1 sec, 6 == 1/10
+;	BNE IRQEND
+;
+;	LDA #$00 ; reset counter
+;	STA CNTR
+;	LDA SCRN_SEL
+;	EOR #$80 ; flip screen select bit
+;	STA SCRN_SEL
+;	LDA CURSCR
+;	EOR #$01
+;	STA CURSCR
+;
+;IRQEND
+;	JMP $EABF
+;
+;; IRQ DATA
+;CNTR	.BYTE	$00
+;CURSCR	.BYTE	$00
+;CURFRM	.BYTE	$00
 
-	LDA #$00 ; reset counter
-	STA CNTR
-	LDA SCRN_SEL
-	EOR #$80 ; slip screen select bit
-	STA SCRN_SEL
+ANIM8:
+	; loop here
+	; coordinate CURSCR and CURFRM: even frames for scr 0, odd for scr 1
+	LDA CURFRM ; CURFRM updated by CHARUPDT, CURSCR updated by IRQ
+	CMP #6
+	BNE continue
+	LDA #$00   ; reset CURFRM at 5
+	STA CURFRM
+continue
+	AND #$01   ; mask to get at parity of FRM number
+	EOR CURSCR ; if CURSCR & CURFRM parity is different, result is 1
+	BEQ ANIM8  ; if same parity, nothing to update
+	LDA #$08   ; need to update; note this means the result of prev EOR leaves 1 in A
+	EOR SRAM_P+1
+	STA SRAM_P+1 ; toggle pointer to screen ram
+	JSR CHARUPDT
+	JMP ANIM8
 
-IRQEND
-	JMP $EABF
-
-; IRQ DATA
-CNTR	.BYTE	$00
-CURSCR	.BYTE	$00
-CURFRM	.BYTE	$00
-
+CHARUPDT
 CHARSET1 ; update chars for screen 1 - should this be part of the interrupt routine? called from
-	PHA
-	LDX #0
-	LDA $11  ; get frame num, since ultimately cyclic with 8 frames
-	AND $7   ; this takes the modulus giving us the offset into charmem
-	TAY ; for counter
-mloop
+; should this be generic, not screen number specific?
+	LDA CURFRM  ; get frame num, since ultimately cyclic with 8 frames
+	AND #$7   ; this takes the modulus giving us the offset into charmem
+	STA CURFRM ; not really needed everytime
+	INC CURFRM ; increment current frame!
+
+; expects current fram number in A
+SCR0UPDT
+	TAY ; use frame no for multiply loop counter
+	LDA #$00
+mloop   ; multiply loop for charrom offset
 	ADC #16
 	DEY
 	BPL mloop ; should only branch on Y >= 0
 	SBC #16
-	TAY       ; Y should be pointing to start of frame in charmem
-	          ; so: char addr = SCR1_RAM + Y w/ Y = 16*FrameNum + X
+	TAY       ; Y should be offset pointing to start of frame in charmem
+	          ; so: char index = Y + X w/ Y = 16*FrameNum
 	          ; With Frame number zero-indexed
 	
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X ;completes line
-	TXA
-	ADC #19 ; 3 + 19 = 22 goes to next line down
-	TAX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X ;completes line
-	TXA
-	ADC #19 ; 3 + 19 = 22 goes to next line down
-	TAX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X ;completes line
-	TXA
-	ADC #19 ; 3 + 19 = 22 goes to next line down
-	TAX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X
-	INX
-	INY
-	LDA CHAR_MEM, Y
-	STA SCR1_RAM, X ;completes line
-	; DONE, UPDATE FRAME NUM
-	INC $11 ; update frame num
+	; Y should hold the base ofset at top here
+	LDX #0
 
-	PLA ; pull A off stack
+; NOTE: Can use ($ADDR) mode to LDA/STA to a pointer saved in memory!
+inlp0 	; inner update loop for screen zero
+	STY SCR0_RAM, X ; Y should hold the cahr index offset at top here
+	INY
+	INX
+	TYA
+	AND #$0F	; mod 16, tells us if we're done frame
+	BEQ scr0end
+	AND #$03
+	BNE inlp0	; Loop if % 4 result is not zero.
+	TXA      	; if not @ end but @ end of row, move X to A,
+	ADC #19 	; add 19 to get to next row in SCRNRAM & continue.
+	TAX
+	JMP  inlp0
+scr0end
 	RTS
 
