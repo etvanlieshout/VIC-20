@@ -81,7 +81,7 @@ IRQS
 BOUNCE_IRQ
 	INC CNTR1
 	LDA CNTR1
-	CMP #60
+	CMP #30
 	BNE IRQEND
 
 	LDA #$00
@@ -151,27 +151,27 @@ BOUNCE_END
 ; Comment out changing x coordinate, will just test y direction movmement
 NXT_POS ; this should be a subroutine -> can be any parametric equations/formula
 	CLC
-;NXT_X
-;	LDA POSDIR
-;	AND #$01
-;	CMP #$00	; 0->DEC, 1->INC
-;	BNE XINC
-;XDEC
-;	DEC XPOS
-;	LDA XPOS
-;	CMP #$FF ; $FF = -1 / $FE = -2
-;	BNE NXT_Y
-;	JSR XDR_TOG ; pos == -1, flip direction
-;	INC XPOS    ; inc once to undo dec to -1
-;	JMP XINC    ; now increment; not needed, can just fall thru
-;XINC
-;	INC XPOS
-;	LDA XPOS
-;	CMP #22 ; off screen
-;	BNE NXT_Y ; if not 23, nothing to change, continue to Y
-;	JSR XDR_TOG ; 23 -> offscreen, so flip direction
-;	DEC XPOS ; dec once to undo inc to 23
-;	JMP XDEC
+NXT_X
+	LDA POSDIR
+	AND #$01
+	CMP #$00	; 0->DEC, 1->INC
+	BNE XINC
+XDEC
+	DEC XPOS
+	LDA XPOS
+	CMP #$FF ; $FF = -1 / $FE = -2
+	BNE NXT_Y
+	JSR XDR_TOG ; pos == -1, flip direction
+	INC XPOS    ; inc once to undo dec to -1
+	JMP XINC    ; now increment; not needed, can just fall thru
+XINC
+	INC XPOS
+	LDA XPOS
+	CMP #22 ; off screen
+	BNE NXT_Y ; if not 23, nothing to change, continue to Y
+	JSR XDR_TOG ; 23 -> offscreen, so flip direction
+	DEC XPOS ; dec once to undo inc to 23
+	JMP XDEC
 	CLC
 NXT_Y
 	LDA POSDIR
@@ -225,11 +225,14 @@ UL_END
 	RTS
 
 DRAW_LOWR ; for this half, our origin is at y=11, x=14, so just subtract 14 at end
+	CLC
 	LDA YPOS
-	SBC #11
+	SEC
+	SBC #11 ; subtracts an extra 1 b/c CLC, helps us skip the 11th row
+	;CMP #0
+	;BEQ LL0END
 	TAY
 	LDA #0
-	CLC
 LL
 	CPY #0
 	BEQ LL_END
@@ -238,15 +241,29 @@ LL
 	DEY
 	JMP LL
 LL_END
+	SEC
+	SBC #14 ;
+	CLC	
 	ADC XPOS
-	SBC #14  ; b/c of something w/ subtract, we don't need the CLC here???
-	;SBC #2
+	;ADC #08
 	TAX ; Now X holds offset in scrn ram for prev box
 	PLA ; pull color off stack
 	STA COLR_RAM + $0100, X
 	RTS
 
+;LL0END ; special case: line 11
+;	CLC
+;	ADC XPOS
+;	SBC #14 ; b/c of something w/ subtract, we don't need the CLC here???
+;	;SBC #2
+;	TAX ; Now X holds offset in scrn ram for prev box
+;	PLA ; pull color off stack
+;	STA COLR_RAM + $0100, X
+;	RTS
 
+; NOTE: line 11 must be handled separately here; otherwise, if you do it thus:
+; (Y-11) + X - 14
+; you will exceed 255 on the 12th line (ie, line 23) w/ x >
 
 ; tells you which half of screen ram you're in by setting the carry flag:
 ; Carry set -> 2nd half of screen RAM
