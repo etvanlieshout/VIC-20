@@ -30,11 +30,11 @@ YPOS = $FC
 
 ; Memory Locations and Kernel subRs
 SCR1_RAM = $1E00
-LIN1_RAM = $1E01 ; Selecting from these addresses picks which line the square
-LIN2_RAM = $1E59 ; appear on.
-LIN3_RAM = $1EB1
-LIN4_RAM = $1F09
-LIN5_RAM = $1F61
+LIN1_RAM = $1E17 ; Selecting from these addresses picks which line the square
+LIN2_RAM = $1E6F ; appear on.
+LIN3_RAM = $1EC7
+LIN4_RAM = $1F1F
+LIN5_RAM = $1F77
 COLR_RAM = $9600
 CHAR_MEM = $1800
 SCRN_SEL = $9002
@@ -89,7 +89,7 @@ SQUARE_IRQ
 BOUNCE_IRQ
 	INC CNTR2
 	LDA CNTR2
-	CMP #30
+	CMP #5
 	BNE IRQEND
 
 	LDA #$00
@@ -117,7 +117,7 @@ WAIT
 ; Reverses color mode (all char fg are same color, each char can have unique bg)
 ; and then clears screen.
 INIT_SCREEN
-	LDA #$64 ; sets inverted mode, shared char fg to red, border to blk
+	LDA #$30 ; sets inverted mode, shared char fg to red, border to blk
 	STA COLR_CTL ; red chosen for testing
 
 	LDX #$00
@@ -175,13 +175,15 @@ CLR_PREV_BOX
 	LDA #1 ; white
 	JSR DRAW_BOX_FROM_COORD
 	JSR NXT_POS
-	JSR PRINT_POS
-	LDA #3 ; blue=6, cyan=3
+	;JSR DB_PRINT_POS ; debuggin info
+	LDA #5 ; blue=6, cyan=3, orange=8, yellow=7, light o=9, light yellow=15
 	JSR DRAW_BOX_FROM_COORD
 BOUNCE_END
 	RTS
 
+; Comment out changing x coordinate, will just test y direction movmement
 NXT_POS ; this should be a subroutine -> can be any parametric equations/formula
+	CLC
 NXT_X
 	LDA POSDIR
 	AND #$01
@@ -203,7 +205,7 @@ XINC
 	JSR XDR_TOG ; 23 -> offscreen, so flip direction
 	DEC XPOS ; dec once to undo inc to 23
 	JMP XDEC
-
+	CLC
 NXT_Y
 	LDA POSDIR
 	AND #$02
@@ -235,16 +237,19 @@ DRAW_BOX_FROM_COORD
 	JSR GET_SCREEN_HALF ; maybe try an actual ret_val instead of flag?
 	BCS DRAW_LOWR
 DRAW_UPPR
+	CLC
 	LDY YPOS
 	LDA #0
-	;CLC
 UL
 	CPY #0
 	BEQ UL_END
-	ADC #21
+	CLC ; MUST HAVE THIS! BEQ will set carry flag once per loop, causing an
+	    ;  off-by-one error every loop, so off by +y on any given line
+	ADC #22
 	DEY
 	JMP UL
 UL_END
+	CLC
 	ADC XPOS
 	;SBC #1
 	TAX ; Now X holds offset in scrn ram for prev box
@@ -253,27 +258,31 @@ UL_END
 	RTS
 
 DRAW_LOWR ; for this half, our origin is at y=11, x=14, so just subtract 14 at end
+	CLC
 	LDA YPOS
-	SBC #11
+	SEC
+	SBC #11 ; subtracts an extra 1 b/c CLC, helps us skip the 11th row
+	;CMP #0
+	;BEQ LL0END
 	TAY
 	LDA #0
-	CLC
 LL
 	CPY #0
 	BEQ LL_END
-	ADC #21
+	CLC
+	ADC #22
 	DEY
 	JMP LL
 LL_END
+	SEC
+	SBC #14 ;
+	CLC	
 	ADC XPOS
-	SBC #15
-	;SBC #2
+	;ADC #08
 	TAX ; Now X holds offset in scrn ram for prev box
 	PLA ; pull color off stack
 	STA COLR_RAM + $0100, X
 	RTS
-
-
 
 ; tells you which half of screen ram you're in by setting the carry flag:
 ; Carry set -> 2nd half of screen RAM
@@ -290,17 +299,17 @@ GET_SCREEN_HALF
 	CPX #14
 	BPL RET_LOWR ; y==11 && x < 14 -> all good
 RET_UPPR
-	LDA #79
-	STA SCR1_RAM + 22
-	LDA #4
-	STA COLR_RAM + 22
+	;LDA #79
+	;STA SCR1_RAM + 22
+	;LDA #4
+	;STA COLR_RAM + 22
 	CLC
 	RTS
 RET_LOWR
-	LDA #76
-	STA SCR1_RAM + 22
-	LDA #4
-	STA COLR_RAM + 22
+	;LDA #76
+	;STA SCR1_RAM + 22
+	;LDA #4
+	;STA COLR_RAM + 22
 	SEC
 	RTS
 
@@ -321,22 +330,21 @@ BOUNCE_INIT
 	LDA #$00
 	STA XPOS
 	STA YPOS
-	JSR PRINT_POS
-	LDA #3
-	STA COLR_RAM
+	;JSR DB_PRINT_POS
+	;LDA #8
+	;STA COLR_RAM+66
 	RTS
 
-PRINT_POS
+DB_PRINT_POS ; print alphabetical coordinate position on screen for debugging
 	LDA XPOS
-	ADC #01 ; '0'
+	ADC #01 ; 'A'
 	STA SCR1_RAM
-	LDA #58
+	LDA #58 ; ':'
 	STA SCR1_RAM+1
 	LDA YPOS
-	ADC #01 ; '0'
+	ADC #01 ; 'A'
 	STA SCR1_RAM+2
 	RTS
-
 
 
 ;---- SCRNUPDT -----------------------------------------------------------------
@@ -360,9 +368,46 @@ MULT
 	          ; With Frame number zero-indexed
 		  ; Y should hold the frame base offset at top of loop (here)
 
+	PHA	  ; Push A to stack so we can retore it & Y for each row
+
 	LDX #0    ; for upcoming loops after branch
 
-DRAWLP
+DRAWLP1
+	CLC
+	STA LIN1_RAM, X
+	STA LIN1_RAM + 4, X
+	STA LIN1_RAM + 8, X
+	STA LIN1_RAM + 12, X
+	STA LIN1_RAM + 16, X
+	ADC #$04
+	STA LIN1_RAM + 22, X
+	STA LIN1_RAM + 26, X
+	STA LIN1_RAM + 30, X
+	STA LIN1_RAM + 34, X
+	STA LIN1_RAM + 38, X
+	ADC #$04
+	STA LIN1_RAM + 44, X
+	STA LIN1_RAM + 48, X
+	STA LIN1_RAM + 52, X
+	STA LIN1_RAM + 56, X
+	STA LIN1_RAM + 60, X
+	ADC #$04
+	STA LIN1_RAM + 66, X
+	STA LIN1_RAM + 70, X
+	STA LIN1_RAM + 74, X
+	STA LIN1_RAM + 78, X
+	STA LIN1_RAM + 82, X
+	ADC #$04
+	INY
+	TYA
+	INX
+	CPX #$04
+	BNE DRAWLP1
+	LDX #0
+	PLA	; reset A and Y for each row
+	TAY
+	PHA	; preserve A & Y for next row
+DRAWLP2
 	CLC
 	STA LIN2_RAM, X
 	STA LIN2_RAM + 4, X
@@ -392,6 +437,110 @@ DRAWLP
 	TYA
 	INX
 	CPX #$04
-	BNE DRAWLP
+	BNE DRAWLP2
+	LDX #0
+	PLA	; reset A and Y for each row
+	TAY
+	PHA	; preserve A & Y for next row
+DRAWLP3
+	CLC
+	STA LIN3_RAM, X
+	STA LIN3_RAM + 4, X
+	STA LIN3_RAM + 8, X
+	STA LIN3_RAM + 12, X
+	STA LIN3_RAM + 16, X
+	ADC #$04
+	STA LIN3_RAM + 22, X
+	STA LIN3_RAM + 26, X
+	STA LIN3_RAM + 30, X
+	STA LIN3_RAM + 34, X
+	STA LIN3_RAM + 38, X
+	ADC #$04
+	STA LIN3_RAM + 44, X
+	STA LIN3_RAM + 48, X
+	STA LIN3_RAM + 52, X
+	STA LIN3_RAM + 56, X
+	STA LIN3_RAM + 60, X
+	ADC #$04
+	STA LIN3_RAM + 66, X
+	STA LIN3_RAM + 70, X
+	STA LIN3_RAM + 74, X
+	STA LIN3_RAM + 78, X
+	STA LIN3_RAM + 82, X
+	ADC #$04
+	INY
+	TYA
+	INX
+	CPX #$04
+	BNE DRAWLP3
+	LDX #0
+	PLA	; reset A and Y for each row
+	TAY
+	PHA	; preserve A & Y for next row
+DRAWLP4
+	CLC
+	STA LIN4_RAM, X
+	STA LIN4_RAM + 4, X
+	STA LIN4_RAM + 8, X
+	STA LIN4_RAM + 12, X
+	STA LIN4_RAM + 16, X
+	ADC #$04
+	STA LIN4_RAM + 22, X
+	STA LIN4_RAM + 26, X
+	STA LIN4_RAM + 30, X
+	STA LIN4_RAM + 34, X
+	STA LIN4_RAM + 38, X
+	ADC #$04
+	STA LIN4_RAM + 44, X
+	STA LIN4_RAM + 48, X
+	STA LIN4_RAM + 52, X
+	STA LIN4_RAM + 56, X
+	STA LIN4_RAM + 60, X
+	ADC #$04
+	STA LIN4_RAM + 66, X
+	STA LIN4_RAM + 70, X
+	STA LIN4_RAM + 74, X
+	STA LIN4_RAM + 78, X
+	STA LIN4_RAM + 82, X
+	ADC #$04
+	INY
+	TYA
+	INX
+	CPX #$04
+	BNE DRAWLP4
+	LDX #0
+	PLA	; reset A and Y for next row
+	TAY	; NOTE: no need to push A for final row; doing so => unbalanced stack
+DRAWLP5
+	CLC
+	STA LIN5_RAM, X
+	STA LIN5_RAM + 4, X
+	STA LIN5_RAM + 8, X
+	STA LIN5_RAM + 12, X
+	STA LIN5_RAM + 16, X
+	ADC #$04
+	STA LIN5_RAM + 22, X
+	STA LIN5_RAM + 26, X
+	STA LIN5_RAM + 30, X
+	STA LIN5_RAM + 34, X
+	STA LIN5_RAM + 38, X
+	ADC #$04
+	STA LIN5_RAM + 44, X
+	STA LIN5_RAM + 48, X
+	STA LIN5_RAM + 52, X
+	STA LIN5_RAM + 56, X
+	STA LIN5_RAM + 60, X
+	ADC #$04
+	STA LIN5_RAM + 66, X
+	STA LIN5_RAM + 70, X
+	STA LIN5_RAM + 74, X
+	STA LIN5_RAM + 78, X
+	STA LIN5_RAM + 82, X
+	ADC #$04
+	INY
+	TYA
+	INX
+	CPX #$04
+	BNE DRAWLP5
 DRAWEND
 	RTS
