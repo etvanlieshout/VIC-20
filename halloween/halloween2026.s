@@ -44,9 +44,11 @@ LIN3_RAM = $1EC7
 LIN4_RAM = $1F1F
 LIN5_RAM = $1F77
 COLR_RAM = $9600
+LN5_CRAM = $9777
 CHAR_MEM = $1800
 SCRN_SEL = $9002
 COLR_CTL = $900F
+CHAR_ROM = $8000
 
 
 ;                              >>> JMP MAIN <<<
@@ -155,9 +157,11 @@ B2D			.BYTE $02				; Bat 2  direction
 MAIN
 	JSR INIT_SCREEN
 	JSR BOUNCE_INIT
+	JSR GET_CHARS
 	JSR IRQINIT
 WAIT
 	NOP		; Spin in a loop while animation runs
+	JSR MSG_PRINT
 	JMP WAIT
 
 ;---- INIT_SCREEN --------------------------------------------------------------
@@ -637,4 +641,153 @@ DRAWLP5
 	CPX #$04
 	BNE DRAWLP5
 DRAWEND
+	RTS
+
+
+; ---- PRINT TEXT --------------------------------------------------------------
+MSG_PRINT
+	LDY #$00 ; Black fg color
+	LDX #$00
+	;LDA CHAR_MEM+8				; 'H'
+	LDA #5				; 'H'
+	STA LIN5_RAM+2, X
+	STY LN5_CRAM+2
+	INX
+	;LDA CHAR_MEM+3				; 'A'
+	LDA #3				; 'A'
+	STA LIN5_RAM+2, X
+	STY LN5_CRAM+3
+	INX
+	;LDA CHAR_MEM+9				; 'P'
+	LDA #9				; 'P'
+	STA LIN5_RAM+2, X
+	STY LN5_CRAM+4
+	INX
+	STA LIN5_RAM+2, X
+	STY LN5_CRAM+5
+	INX
+	;LDA CHAR_MEM+11				; 'Y'
+	LDA #11				; 'Y'
+	STA LIN5_RAM+2, X
+	STY LN5_CRAM+6
+	INX
+	INX		; SKIP A SPAACE !!
+	;LDA CHAR_MEM+8				; 'H'
+	LDA #5				; 'H'
+	STA LIN5_RAM+3, X
+	STY LN5_CRAM+9
+	INX
+	;LDA CHAR_MEM+3				; 'A'
+	LDA #3				; 'A'
+	STA LIN5_RAM+3, X
+	STY LN5_CRAM+10
+	INX
+	;LDA CHAR_MEM+6				; 'L'
+	LDA #6				; 'L'
+	STA LIN5_RAM+3, X
+	STY LN5_CRAM+11
+	INX
+	STA LIN5_RAM+3, X
+	STY LN5_CRAM+12
+	INX
+	;LDA CHAR_MEM+8				; 'O'
+	LDA #8				; 'O'
+	STA LIN5_RAM+3, X
+	STY LN5_CRAM+13
+	INX
+	;LDA CHAR_MEM+10				; 'W'
+	LDA #10				; 'W'
+	STA LIN5_RAM+3, X
+	STY LN5_CRAM+14
+	INX
+	;LDA CHAR_MEM+5				; 'E'
+	LDA #4				; 'E'
+	STA LIN5_RAM+3, X
+	STY LN5_CRAM+15
+	INX
+	STA LIN5_RAM+3, X
+	STY LN5_CRAM+16
+	INX
+	;LDA CHAR_MEM+7				; 'N'
+	LDA #7				; 'N'
+	STA LIN5_RAM+3, X
+	STY LN5_CRAM+17
+
+	RTS
+
+; ---- GET LETTER CHARS FROM ROM -----------------------------------------------
+; REMEMBER: EACH CHAR IS 8 BYTES !!
+GET_CHARS
+	LDX		#00
+A_CHAR
+	LDA		CHAR_ROM+8, X		; 'A' -> 1 * 8
+	STA		CHAR_MEM+24, X	; First 3 chars are bat & blank chars; 3 * (8 bytes)
+	INX
+	CPX		#8
+	BNE		A_CHAR
+
+	LDX		#00
+E_CHAR
+	LDA		CHAR_ROM+40, X	; 'E' -> 5 * 8
+	STA		CHAR_MEM+32, X	; Now 4 chars deep; 4 * 8
+	INX
+	CPX		#8
+	BNE		E_CHAR
+
+	LDX		#00
+H_CHAR
+	LDA		CHAR_ROM+64, X	; 'H'
+	STA		CHAR_MEM+40, X
+	INX
+	CPX		#8
+	BNE		H_CHAR
+
+	LDX		#00
+L_CHAR
+	LDA		CHAR_ROM+96, X	; 'L'
+	STA		CHAR_MEM+48, X
+	INX
+	CPX		#8
+	BNE		L_CHAR
+
+	LDX		#00
+N_CHAR
+	LDA		CHAR_ROM+112, X	; 'N'
+	STA		CHAR_MEM+56, X
+	INX
+	CPX		#8
+	BNE		N_CHAR
+
+	LDX		#00
+O_CHAR
+	LDA		CHAR_ROM+120, X	; 'O'
+	STA		CHAR_MEM+64, X
+	INX
+	CPX		#8
+	BNE		O_CHAR
+
+	LDX		#00
+P_CHAR
+	LDA		CHAR_ROM+128, X	; 'P'
+	STA		CHAR_MEM+72, X
+	INX
+	CPX		#8
+	BNE		P_CHAR
+
+	LDX		#00
+W_CHAR
+	LDA		CHAR_ROM+184, X	; 'W'
+	STA		CHAR_MEM+80, X
+	INX
+	CPX		#8
+	BNE		W_CHAR
+
+	LDX		#00
+Y_CHAR
+	LDA		CHAR_ROM+200, X	; 'Y'
+	STA		CHAR_MEM+88, X
+	INX
+	CPX		#8
+	BNE		Y_CHAR
+
 	RTS
