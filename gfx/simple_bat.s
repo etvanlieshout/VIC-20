@@ -23,4 +23,4 @@
 ;
 ; -> bat itself is 13px width x 5px height
 
-
+.BYTE $00,$00,$00,$00,$00,$00,$00,$00	; Empty Space for custom char set
