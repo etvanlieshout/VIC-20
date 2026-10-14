@@ -89,21 +89,27 @@ IRQS
 SQUARE_IRQ
 	INC CNTR1
 	LDA CNTR1
-	CMP #$06 ; -> 60 ticks = 1 sec; 6 ticks = 1/10 s
+	CMP #$07 ; -> 60 ticks = 1 sec; 6 ticks = 1/10 s
 	BNE BOUNCE_IRQ
 
 	LDA #$00 ; reset counter
 	STA CNTR1
 	; JSR SCRNUPDT    ; For testing bouncing bat, leave out bg animation for now
+	JMP BAT1
 
 BOUNCE_IRQ
 	INC CNTR2
 	LDA CNTR2
 	CMP #7
-	BNE IRQEND
+	BNE IRQEND_JMP ; irq tooo fat for a branch to jump all the bat info loadings
+	JMP BAT2
+IRQEND_JMP
+	JMP IRQEND
 
+BATS
+BAT1
 	LDA #$00
-	STA CNTR2
+	STA CNTR1
 	; BAT 1
 	; Load the different bats location data into XPOS, YPOS, and POSDIR before calling BOUNCE SR
 	LDA B1X
@@ -112,6 +118,14 @@ BOUNCE_IRQ
 	STA YPOS
 	LDA B1D
 	STA POSDIR
+	LDA B1PRVCR
+	STA PREV_CHARS				; Load prev char data to restore
+	LDA B1PRVCR+1
+	STA PREV_CHARS+1
+	LDA B1PRVCL
+	STA PREV_COLRS				; Load prev char color data to restore
+	LDA B1PRVCL+1
+	STA PREV_COLRS+1
 	JSR BOUNCE
 	; Made sure to store bats updated XPOS, YPOS, and POSDIR vars
 	LDA XPOS
@@ -120,7 +134,19 @@ BOUNCE_IRQ
 	STA B1Y
 	LDA POSDIR
 	STA B1D
+	LDA PREV_CHARS				; Load prev char data to restore next update
+	STA B1PRVCR
+	LDA PREV_CHARS+1
+	STA B1PRVCR+1
+	LDA PREV_COLRS				; Load prev char color data to restore next update
+	STA B1PRVCL
+	LDA PREV_COLRS+1
+	STA B1PRVCL+1
+	JMP IRQEND
+BAT2
 	; BAT 2
+	LDA #$00
+	STA CNTR2
 	; Load the different bats location data into XPOS, YPOS, and POSDIR before calling BOUNCE SR
 	LDA B2X
 	STA XPOS
@@ -128,6 +154,14 @@ BOUNCE_IRQ
 	STA YPOS
 	LDA B2D
 	STA POSDIR
+	LDA B2PRVCR
+	STA PREV_CHARS				; Load prev char data to restore
+	LDA B2PRVCR+1
+	STA PREV_CHARS+1
+	LDA B2PRVCL
+	STA PREV_COLRS				; Load prev char color data to restore
+	LDA B2PRVCL+1
+	STA PREV_COLRS+1
 	JSR BOUNCE
 	; Made sure to store bats updated XPOS, YPOS, and POSDIR vars
 	LDA XPOS
@@ -136,32 +170,47 @@ BOUNCE_IRQ
 	STA B2Y
 	LDA POSDIR
 	STA B2D
+	LDA PREV_CHARS				; Load prev char data to restore next update
+	STA B2PRVCR
+	LDA PREV_CHARS+1
+	STA B2PRVCR+1
+	LDA PREV_COLRS				; Load prev char color data to restore next update
+	STA B2PRVCL
+	LDA PREV_COLRS+1
+	STA B2PRVCL+1
 
 IRQEND
 	JMP $EABF
 
 ; IRQ DATA
-CNTR1	.BYTE	$00 ; for rotating squares| Starting counters at different nums
-CNTR2	.BYTE	$01 ; for bouncing block  | keeps the all animation from happening together.
+CNTR1	.BYTE	$00 ; for Bat 1           | Starting counters at different nums
+CNTR2	.BYTE	$00 ; for Bar 2           | keeps the all animation from happening together.
 CURFRM	.BYTE	$00
 
 ; PROGRAM DATA
 B1X			.BYTE $00				; Bat 1 x position
 B1Y			.BYTE $00				; Bat 1 y position
 B1D			.BYTE $03				; Bat 1  direction
+B1PRVCR	.BYTE $02, $02	; Bat 1 overwritten chars
+B1PRVCL	.BYTE $00, $00	; Bat 1 overwritten chars colors
 B2X			.BYTE  19				; Bat 2 x position
 B2Y			.BYTE  02				; Bat 2 y position
 B2D			.BYTE $02				; Bat 2  direction
+B2PRVCR	.BYTE $02, $02	; Bat 2 overwritten chars
+B2PRVCL	.BYTE $00, $00	; Bat 2 overwritten chars colors
 
 ;---- MAIN ---------------------------------------------------------------------
 MAIN
 	JSR INIT_SCREEN
 	JSR BOUNCE_INIT
 	JSR GET_CHARS
+	JSR MSG_PRINT
+	JSR JACK_PRINT
 	JSR IRQINIT
 WAIT
 	NOP		; Spin in a loop while animation runs
-	JSR MSG_PRINT
+	;JSR MSG_PRINT
+	;JSR JACK_PRINT
 	JMP WAIT
 
 ;---- INIT_SCREEN --------------------------------------------------------------
@@ -216,6 +265,10 @@ CLR_LP2
 ;	RTS
 
 POSDIR .BYTE $03 ; bit 1 is y direction, bit 0 is x direction; 1=right/down
+PREV_CHARS			.BYTE $00, $00	; store char matrix indices for any characters
+																; overwritten by previous frame. Used to restore
+														    ; overwritten characters (if desired).
+PREV_COLRS			.BYTE $00, $00	; Same deal as prev_chars directly above
 
 ;---- BOUNCE UPDATE ------------------------------------------------------------
 ; Screen too big for 8-bits, so will need two versions, one with the VRAM addr
@@ -224,15 +277,17 @@ POSDIR .BYTE $03 ; bit 1 is y direction, bit 0 is x direction; 1=right/down
 BOUNCE
 CLR_PREV_BOX
 	; Clear prev box picture
-	LDA #2 ; load space char to clear
-	STA  COORD_CHAR  ; store char to print
-	LDA #1 ; load color to A (1-white)
+	;LDA #2 ; load space char to clear
+	LDA PREV_CHARS				; load prev char
+	STA COORD_CHAR				; store char to print
+	LDA PREV_COLRS				; load prev color
 	LDX XPOS
 	LDY YPOS
 	JSR DRAW_BOX_FROM_COORD
-	LDA #2 ; load space char to clear
-	STA  COORD_CHAR  ; store char to print
-	LDA #1 ; load color to A (1-white)
+	;LDA #2 ; load space char to clear
+	LDA PREV_CHARS+1			; load prev char
+	STA COORD_CHAR				; store char to print
+	LDA PREV_COLRS+1			; load prev color
 	LDX XPOS
 	LDY YPOS
 	INX
@@ -242,6 +297,9 @@ CLR_PREV_BOX
 	JSR NXT_POS
 	;JSR DB_PRINT_POS ; debuggin info
 
+	; Once x,y incremented -> save new to-be-overwritten chars back to PREV_CHARS
+
+
 	; Draw next box picture
 	LDA #0 ; load first bat char
 	STA  COORD_CHAR  ; store char to print
@@ -249,6 +307,12 @@ CLR_PREV_BOX
 	LDX XPOS
 	LDY YPOS
 	JSR DRAW_BOX_FROM_COORD
+	; store old char data
+	; CMP		#2			; compare char w/ 2: if >-, then print, otherwise print blank
+	; BGE ; TUESDAY 9PM LEFT OFF HERE, DOING A CHECK: IF PREV CHAR IS A BAT CHAR, do NOT RESTORE
+	STA		PREV_CHARS
+	STY		PREV_COLRS
+
 	LDA #1 ; load second bat char
 	STA  COORD_CHAR  ; store char to print
 	LDA #0
@@ -256,6 +320,9 @@ CLR_PREV_BOX
 	LDY YPOS
 	INX
 	JSR DRAW_BOX_FROM_COORD
+	; store old char data
+	STA		PREV_CHARS+1
+	STY		PREV_COLRS+1
 BOUNCE_END
 	RTS
 
@@ -315,6 +382,7 @@ NXT_POS_END
 ; ... at least in theory... didnt work... PHA -> JSR STACK FRAME -> Subroutine
 ; Instead, just create a mem location
 COORD_CHAR			.BYTE $00				; holds the char to be printed @ coordinate
+; MODIFIED TO RETURN PREV CHAR IN A AND PREV CHAR COLOR IN Y
 DRAW_BOX_FROM_COORD
 	PHA ; SETUP: put color on stack...
 	TXA ; ...then...
@@ -343,11 +411,17 @@ UL_END
 	ADC XTMP
 	;SBC #1
 	TAX ; Now X holds offset in scrn ram for prev box
+	; MODIFICATION: PULL PREV CHAR DATA FOR LATER RESTORATION
+	LDA COLR_RAM, X
+	TAY ; NOW Y HOLDS PREV CHAR COLOR INFO
 	PLA ; pull color off stack
 	STA COLR_RAM, X
-	LDA COORD_CHAR ; load char
-	STA SCR1_RAM, X
-	RTS
+	LDA SCR1_RAM, X ; get prev char
+	PHA ; push prev char to stack
+	LDA COORD_CHAR ; load new char to A
+	STA SCR1_RAM, X ; write new char to SCREEN RAM
+	PLA ; Pull prev char back to A
+	RTS		; should now return w/ prev char in A and prev color in Y
 
 DRAW_LOWR ; for this half, our origin is at y=11, x=14, so just subtract 14 at end
 	CLC
@@ -373,11 +447,17 @@ LL_END
 	ADC XTMP
 	;ADC #08
 	TAX ; Now X holds offset in scrn ram for prev box
+	; MODIFICATION: PULL PREV CHAR DATA FOR LATER RESTORATION
+	LDA COLR_RAM + $0100, X
+	TAY ; NOW Y HOLDS PREV CHAR COLOR INFO
 	PLA ; pull color off stack
 	STA COLR_RAM + $0100, X
-	LDA COORD_CHAR ; load char
-	STA SCR1_RAM + $0100, X
-	RTS
+	LDA SCR1_RAM + $0100, X ; get prev char
+	PHA ; push prev char to stack
+	LDA COORD_CHAR ; load new char to A
+	STA SCR1_RAM + $0100, X ; write new char back to SCREEN RAM
+	PLA ; Pull prev char back to A
+	RTS		; should now return w/ prev char in A and prev color in Y
 
 ; tells you which half of screen ram you're in by setting the carry flag:
 ; Carry set -> 2nd half of screen RAM
@@ -643,22 +723,45 @@ DRAWLP5
 DRAWEND
 	RTS
 
+; ---- DRAW JACK'O'LANTERN -----------------------------------------------------
+JACK_PRINT
+	LDX #$00; offsef counter
+	LDY #07 ; Yellow fg color
+	LDA #12				; 'Filled Block'
+	STA SCR1_RAM+72
+	STY COLR_RAM+72
+	STA SCR1_RAM+93
+	STY COLR_RAM+93
+	STA SCR1_RAM+94
+	STY COLR_RAM+94
+	STA SCR1_RAM+95
+	STY COLR_RAM+95
+	STA SCR1_RAM+82
+	STY COLR_RAM+82
+	STA SCR1_RAM+103
+	STY COLR_RAM+103
+	STA SCR1_RAM+104
+	STY COLR_RAM+104
+	STA SCR1_RAM+105
+	STY COLR_RAM+105
+
+	STA SCR1_RAM+226
+	STY COLR_RAM+226
+	RTS
+
 
 ; ---- PRINT TEXT --------------------------------------------------------------
 MSG_PRINT
 	LDY #$00 ; Black fg color
 	LDX #$00
-	;LDA CHAR_MEM+8				; 'H'
 	LDA #5				; 'H'
 	STA LIN5_RAM+2, X
 	STY LN5_CRAM+2
 	INX
-	;LDA CHAR_MEM+3				; 'A'
 	LDA #3				; 'A'
 	STA LIN5_RAM+2, X
 	STY LN5_CRAM+3
 	INX
-	;LDA CHAR_MEM+9				; 'P'
 	LDA #9				; 'P'
 	STA LIN5_RAM+2, X
 	STY LN5_CRAM+4
@@ -666,23 +769,19 @@ MSG_PRINT
 	STA LIN5_RAM+2, X
 	STY LN5_CRAM+5
 	INX
-	;LDA CHAR_MEM+11				; 'Y'
 	LDA #11				; 'Y'
 	STA LIN5_RAM+2, X
 	STY LN5_CRAM+6
 	INX
 	INX		; SKIP A SPAACE !!
-	;LDA CHAR_MEM+8				; 'H'
 	LDA #5				; 'H'
 	STA LIN5_RAM+3, X
 	STY LN5_CRAM+9
 	INX
-	;LDA CHAR_MEM+3				; 'A'
 	LDA #3				; 'A'
 	STA LIN5_RAM+3, X
 	STY LN5_CRAM+10
 	INX
-	;LDA CHAR_MEM+6				; 'L'
 	LDA #6				; 'L'
 	STA LIN5_RAM+3, X
 	STY LN5_CRAM+11
@@ -690,17 +789,14 @@ MSG_PRINT
 	STA LIN5_RAM+3, X
 	STY LN5_CRAM+12
 	INX
-	;LDA CHAR_MEM+8				; 'O'
 	LDA #8				; 'O'
 	STA LIN5_RAM+3, X
 	STY LN5_CRAM+13
 	INX
-	;LDA CHAR_MEM+10				; 'W'
 	LDA #10				; 'W'
 	STA LIN5_RAM+3, X
 	STY LN5_CRAM+14
 	INX
-	;LDA CHAR_MEM+5				; 'E'
 	LDA #4				; 'E'
 	STA LIN5_RAM+3, X
 	STY LN5_CRAM+15
@@ -708,7 +804,6 @@ MSG_PRINT
 	STA LIN5_RAM+3, X
 	STY LN5_CRAM+16
 	INX
-	;LDA CHAR_MEM+7				; 'N'
 	LDA #7				; 'N'
 	STA LIN5_RAM+3, X
 	STY LN5_CRAM+17
