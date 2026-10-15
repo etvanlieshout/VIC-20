@@ -276,16 +276,25 @@ PREV_COLRS			.BYTE $00, $00	; Same deal as prev_chars directly above
 ; NEW PLAN: SAT JAN 18: three subroutine calls: GET_SCREEN_HALF, GET_POS_OFFSET, NEXT_POS
 BOUNCE
 CLR_PREV_BOX
+RESTORE_START
 	; Clear prev box picture
 	;LDA #2 ; load space char to clear
-	LDA PREV_CHARS				; load prev char
+	LDA PREV_CHARS				; load prev char (ie, index into char rom)
+	CLC
+	CMP #2								; COMPARE w/ 2: if idx < 2 -> bat char is prev char -> skip
+	BCC	RESTORE_NEXT			; BCC == strictly less than -> Take Branch (skip) if < 2
+
 	STA COORD_CHAR				; store char to print
 	LDA PREV_COLRS				; load prev color
 	LDX XPOS
 	LDY YPOS
 	JSR DRAW_BOX_FROM_COORD
+RESTORE_NEXT
 	;LDA #2 ; load space char to clear
 	LDA PREV_CHARS+1			; load prev char
+	CLC
+	CMP #2								; COMPARE w/ 2: if idx < 2 -> bat char is prev char -> skip
+	BCC	INCREMENT			; BCC == strictly less than -> Take Branch (skip) if < 2
 	STA COORD_CHAR				; store char to print
 	LDA PREV_COLRS+1			; load prev color
 	LDX XPOS
@@ -293,6 +302,7 @@ CLR_PREV_BOX
 	INX
 	JSR DRAW_BOX_FROM_COORD
 
+INCREMENT
 	; increment pos
 	JSR NXT_POS
 	;JSR DB_PRINT_POS ; debuggin info
@@ -308,8 +318,6 @@ CLR_PREV_BOX
 	LDY YPOS
 	JSR DRAW_BOX_FROM_COORD
 	; store old char data
-	; CMP		#2			; compare char w/ 2: if >-, then print, otherwise print blank
-	; BGE ; TUESDAY 9PM LEFT OFF HERE, DOING A CHECK: IF PREV CHAR IS A BAT CHAR, do NOT RESTORE
 	STA		PREV_CHARS
 	STY		PREV_COLRS
 
